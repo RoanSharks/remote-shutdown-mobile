@@ -65,7 +65,20 @@ jobs:
             - name: Build APK
               run: |
                   echo "=== Starting APK Build ==="
-                  export PATH=$PATH:$ANDROID_HOME/build-tools/29.0.3
+                  # Configure buildozer to use system Android SDK
+                  export ANDROID_HOME=/usr/local/lib/android/sdk
+                  export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+                  export PATH=$PATH:/usr/local/lib/android/sdk/build-tools/29.0.3
+                  export PATH=$PATH:/usr/local/lib/android/sdk/platform-tools
+                  
+                  # Create symlinks so buildozer finds the SDK in its expected location
+                  mkdir -p /home/runner/.buildozer/android/platform/
+                  ln -sf /usr/local/lib/android/sdk /home/runner/.buildozer/android/platform/android-sdk
+                  
+                  # Verify the symlink worked
+                  ls -la /home/runner/.buildozer/android/platform/android-sdk/build-tools/ || echo "Build tools not found"
+                  find /home/runner/.buildozer/android/platform/android-sdk -name "aidl" -type f || echo "AIDL not found in buildozer SDK"
+                  
                   buildozer android debug
 
             - name: Find APK
