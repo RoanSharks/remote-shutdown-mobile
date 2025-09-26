@@ -19,7 +19,7 @@ source.include_exts = py,png,jpg,kv,atlas
 version = 1.0
 
 # Application requirements
-requirements = python3,kivy,requests,urllib3,certifi
+requirements = python3,kivy==2.1.0,requests,urllib3,certifi
 
 # Android entry point
 android.entrypoint = org.kivy.android.PythonActivity
@@ -27,29 +27,17 @@ android.entrypoint = org.kivy.android.PythonActivity
 # Android app theme
 android.theme = @android:style/Theme.NoTitleBar
 
-# List of service to declare
-#services = NAME:ENTRYPOINT_TO_PY,NAME2:ENTRYPOINT2_TO_PY
-
 # Permissions
 android.permissions = INTERNET,ACCESS_NETWORK_STATE
-
-# Android application meta-data to set
-#android.meta_data =
-
-# Android library project to add to the project
-#android.add_src =
-
-# Android logcat filters to use
-#android.logcat_filters = *:S python:D
 
 # Copy library/jar automatically depending on requirements
 android.copy_libs = 1
 
 # The Android arch to build for
-android.arch = armeabi-v7a
+android.arch = arm64-v8a
 
 # The Android API to use
-android.api = 31
+android.api = 33
 
 # The minimum API your APK will support
 android.minapi = 21
@@ -58,16 +46,13 @@ android.minapi = 21
 android.ndk = 25b
 
 # The Android SDK version to use
-android.sdk = 31
-
-# Python for android recipe to use
-#p4a.recipe =
-
-# Whitelist for the python modules and packages to be installed
-#p4a.whitelist =
+android.sdk = 33
 
 # Bootstrap to use for android builds
 p4a.bootstrap = sdl2
+
+# Python for android branch to use
+p4a.branch = master
 
 [buildozer]
 
