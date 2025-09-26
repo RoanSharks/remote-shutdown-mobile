@@ -79,9 +79,9 @@ jobs:
               run: |
                   echo "=== FUCK BUILDOZER - USING P4A DIRECTLY ==="
                   
-                  # Switch to Java 11 
-                  export JAVA_HOME=/usr/lib/jvm/temurin-11-jdk-amd64
-                  export PATH=/usr/lib/jvm/temurin-11-jdk-amd64/bin:$PATH
+                  # Use Java 17 for ALL Android SDK tools (they require it!)
+                  export JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
+                  export PATH=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64/bin:$PATH
                   
                   # Set Android environment
                   export ANDROID_HOME=/usr/local/lib/android/sdk
@@ -100,6 +100,10 @@ jobs:
                   java -version
                   which aidl
                   aidl --help | head -3
+                  
+                  # Test avdmanager (the tool that was failing)
+                  echo "=== Testing avdmanager ==="
+                  avdmanager list target || echo "avdmanager failed but continuing..."
                   
                   # Create APK directly with p4a (BYPASS BUILDOZER COMPLETELY!)
                   p4a apk \
