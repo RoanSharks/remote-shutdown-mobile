@@ -1,313 +1,290 @@
-# mobile_controller.py - Modern Mobile version of Cloudflare Remote Shutdown Controller
+# mobile_controller.py - Mobile version of Cloudflare Remote Shutdown Controller
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
-from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.popup import Popup
 from kivy.uix.scrollview import ScrollView
-from kivy.uix.widget import Widget
-from kivy.graphics import Color, RoundedRectangle, Line
+from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem
 from kivy.clock import Clock
 from kivy.metrics import dp
-from kivy.utils import get_color_from_hex
+from kivy.core.window import Window
+from kivy.properties import StringProperty
 import requests
 import urllib3
 import threading
 
+# Set the app to portrait mode
+Window.orientation = 'portrait'
+
 # Disable SSL warnings when using verify=False
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# CONFIG - Update this URL when you get a new Cloudflare tunnel URL
-TARGET_URL = "https://your-cloudflare-url.trycloudflare.com/shutdown"
-ADMIN_TOKEN = "admin-shutdown-2024-token-secure"
+# CONFIG - Default values
+DEFAULT_TARGET_URL = "https://your-cloudflare-url.trycloudflare.com/shutdown"
+DEFAULT_ADMIN_TOKEN = "admin-shutdown-2024-token-secure"
 
-# Modern Color Scheme - Dark theme with vibrant accents
-COLORS = {
-    'primary': get_color_from_hex('#FF6B35'),      # Orange accent
-    'secondary': get_color_from_hex('#4ECDC4'),    # Teal
-    'background': get_color_from_hex('#1A1A1A'),   # Dark background
-    'surface': get_color_from_hex('#2D2D2D'),      # Card background
-    'text_primary': get_color_from_hex('#FFFFFF'), # White text
-    'text_secondary': get_color_from_hex('#B0B0B0'), # Gray text
-    'success': get_color_from_hex('#4CAF50'),      # Green
-    'warning': get_color_from_hex('#FF9800'),      # Orange
-    'error': get_color_from_hex('#F44336'),        # Red
-}
-
-class ModernCard(RelativeLayout):
-    def __init__(self, **kwargs):
+class SettingsPanel(BoxLayout):
+    title = StringProperty("Settings")
+    
+    def __init__(self, app_instance, **kwargs):
         super().__init__(**kwargs)
-        self.size_hint_y = None
-        with self.canvas.before:
-            Color(*COLORS['surface'])
-            self.rect = RoundedRectangle(
-                pos=self.pos,
-                size=self.size,
-                radius=[dp(15)]
-            )
-        self.bind(pos=self.update_rect, size=self.update_rect)
-    
-    def update_rect(self, *args):
-        self.rect.pos = self.pos
-        self.rect.size = self.size
-
-class ModernButton(Button):
-    def __init__(self, bg_color=None, **kwargs):
-        super().__init__(**kwargs)
-        self.background_normal = ''
-        self.background_down = ''
-        self.bg_color = bg_color or COLORS['primary']
-        self.color = COLORS['text_primary']
-        self.font_size = dp(16)
-        self.bold = True
+        self.app_instance = app_instance
+        self.orientation = 'vertical'
+        self.spacing = dp(15)
+        self.padding = dp(20)
         
-        with self.canvas.before:
-            self.color_instruction = Color(*self.bg_color)
-            self.rect = RoundedRectangle(
-                pos=self.pos,
-                size=self.size,
-                radius=[dp(25)]
-            )
-        self.bind(pos=self.update_graphics, size=self.update_graphics)
-    
-    def update_graphics(self, *args):
-        self.rect.pos = self.pos
-        self.rect.size = self.size
-    
-    def on_press(self):
-        darker_color = [c * 0.8 for c in self.bg_color[:3]] + [self.bg_color[3]]
-        self.color_instruction.rgba = darker_color
-    
-    def on_release(self):
-        self.color_instruction.rgba = self.bg_color
-
-class ModernTextInput(TextInput):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.background_normal = ''
-        self.background_active = ''
-        self.foreground_color = COLORS['text_primary']
-        self.cursor_color = COLORS['primary']
-        self.font_size = dp(14)
-        self.padding = [dp(15), dp(10)]
-        
-        with self.canvas.before:
-            Color(*COLORS['surface'])
-            self.rect = RoundedRectangle(
-                pos=self.pos,
-                size=self.size,
-                radius=[dp(10)]
-            )
-            Color(*COLORS['text_secondary'])
-            self.border = Line(
-                rounded_rectangle=(self.x, self.y, self.width, self.height, dp(10)),
-                width=1
-            )
-        self.bind(pos=self.update_graphics, size=self.update_graphics, focus=self.on_focus)
-    
-    def update_graphics(self, *args):
-        self.rect.pos = self.pos
-        self.rect.size = self.size
-        self.border.rounded_rectangle = (self.x, self.y, self.width, self.height, dp(10))
-    
-    def on_focus(self, instance, value):
-        if value:
-            self.canvas.before.children[-1].rgba = COLORS['primary']
-        else:
-            self.canvas.before.children[-1].rgba = COLORS['text_secondary']
-
-class MobileShutdownController(FloatLayout):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        
-        # Background
-        with self.canvas.before:
-            Color(*COLORS['background'])
-            self.bg_rect = RoundedRectangle(pos=self.pos, size=self.size)
-        self.bind(size=self.update_bg, pos=self.update_bg)
-        
-        # Main container
-        main_container = BoxLayout(
-            orientation='vertical',
-            spacing=dp(20),
-            padding=[dp(25), dp(40), dp(25), dp(25)],
-            size_hint=(1, 1),
-            pos_hint={'center_x': 0.5, 'center_y': 0.5}
-        )
-        
-        # Header
-        header = self.create_header()
-        main_container.add_widget(header)
-        
-        # URL input card
-        url_card = self.create_url_card()
-        main_container.add_widget(url_card)
-        
-        # Status card
-        status_card = self.create_status_card()
-        main_container.add_widget(status_card)
-        
-        # Action buttons
-        buttons_section = self.create_buttons_section()
-        main_container.add_widget(buttons_section)
-        
-        # Instructions card
-        instructions_card = self.create_instructions_card()
-        main_container.add_widget(instructions_card)
-        
-        self.add_widget(main_container)
-    
-    def update_bg(self, *args):
-        self.bg_rect.pos = self.pos
-        self.bg_rect.size = self.size
-    
-    def create_header(self):
-        header = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(100), spacing=dp(5))
-        
-        icon = Label(text='🔌', font_size=dp(40), size_hint_y=None, height=dp(50))
-        header.add_widget(icon)
-        
+        # Title
         title = Label(
-            text='Remote Shutdown Controller',
-            font_size=dp(22), size_hint_y=None, height=dp(35),
-            bold=True, color=COLORS['text_primary']
+            text='Settings',
+            font_size=dp(24),
+            size_hint_y=None,
+            height=dp(50),
+            bold=True
         )
-        header.add_widget(title)
+        self.add_widget(title)
         
-        subtitle = Label(
-            text='Secure remote computer control',
-            font_size=dp(14), size_hint_y=None, height=dp(20),
-            color=COLORS['text_secondary']
+        # Admin Token section
+        token_section = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(140))
+        token_section.add_widget(Label(
+            text='Admin Token:',
+            font_size=dp(16),
+            size_hint_y=None,
+            height=dp(40),
+            bold=True,
+            halign='left',
+            text_size=(None, None)
+        ))
+        
+        self.token_input = TextInput(
+            text=DEFAULT_ADMIN_TOKEN,
+            multiline=False,
+            size_hint_y=None,
+            height=dp(40),
+            font_size=dp(14),
+            password=True
         )
-        header.add_widget(subtitle)
+        token_section.add_widget(self.token_input)
         
-        return header
-    
-    def create_url_card(self):
-        card = ModernCard(height=dp(140))
-        
-        content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(20))
-        
-        label = Label(
-            text='🌐 Cloudflare Tunnel URL',
-            font_size=dp(16), size_hint_y=None, height=dp(30),
-            color=COLORS['text_primary'], halign='left', bold=True
+        # Toggle password visibility
+        toggle_btn = Button(
+            text='Show/Hide Token',
+            size_hint_y=None,
+            height=dp(40),
+            background_color=(0.6, 0.6, 0.6, 1)
         )
-        label.bind(texture_size=label.setter('text_size'))
-        content.add_widget(label)
+        toggle_btn.bind(on_press=self.toggle_password_visibility)
+        token_section.add_widget(toggle_btn)
         
-        self.url_input = ModernTextInput(
-            text=TARGET_URL, multiline=False, size_hint_y=None, height=dp(45),
-            hint_text='Enter your Cloudflare tunnel URL...'
+        save_token_btn = Button(
+            text='Save Token',
+            size_hint_y=None,
+            height=dp(40),
+            background_color=(0.2, 0.8, 0.2, 1)
         )
-        content.add_widget(self.url_input)
+        save_token_btn.bind(on_press=self.save_token)
+        token_section.add_widget(save_token_btn)
         
-        update_btn = ModernButton(
-            text='📝 Update URL', size_hint_y=None, height=dp(35),
-            bg_color=COLORS['secondary']
+        self.add_widget(token_section)
+        
+        # Reset to defaults
+        reset_section = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(100))
+        reset_section.add_widget(Label(
+            text='Reset Settings:',
+            font_size=dp(16),
+            size_hint_y=None,
+            height=dp(40),
+            bold=True
+        ))
+        
+        reset_btn = Button(
+            text='Reset to Defaults',
+            size_hint_y=None,
+            height=dp(50),
+            background_color=(1, 0.5, 0, 1)
         )
-        update_btn.bind(on_press=self.update_url)
-        content.add_widget(update_btn)
+        reset_btn.bind(on_press=self.reset_defaults)
+        reset_section.add_widget(reset_btn)
         
-        card.add_widget(content)
-        return card
-    
-    def create_status_card(self):
-        card = ModernCard(height=dp(60))
+        self.add_widget(reset_section)
         
-        content = BoxLayout(orientation='horizontal', padding=dp(20), spacing=dp(10))
-        
-        self.status_indicator = Label(
-            text='●', font_size=dp(20), size_hint_x=None, width=dp(30),
-            color=COLORS['success']
+        # Status/Info section
+        self.settings_status = Label(
+            text='Settings ready',
+            font_size=dp(14),
+            color=(0, 1, 0, 1),
+            size_hint_y=None,
+            height=dp(40)
         )
-        content.add_widget(self.status_indicator)
+        self.add_widget(self.settings_status)
         
-        self.status_label = Label(
-            text='Ready to connect', font_size=dp(16),
-            color=COLORS['text_primary'], halign='left'
-        )
-        self.status_label.bind(texture_size=self.status_label.setter('text_size'))
-        content.add_widget(self.status_label)
-        
-        card.add_widget(content)
-        return card
-    
-    def create_buttons_section(self):
-        section = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(130), spacing=dp(15))
-        
-        test_btn = ModernButton(
-            text='🔍 Test Connection', size_hint_y=None, height=dp(55),
-            bg_color=COLORS['warning']
-        )
-        test_btn.bind(on_press=self.test_connection)
-        section.add_widget(test_btn)
-        
-        shutdown_btn = ModernButton(
-            text='⚡ SHUTDOWN TARGET', size_hint_y=None, height=dp(60),
-            bg_color=COLORS['error'], font_size=dp(18)
-        )
-        shutdown_btn.bind(on_press=self.confirm_shutdown)
-        section.add_widget(shutdown_btn)
-        
-        return section
-    
-    def create_instructions_card(self):
-        card = ModernCard(height=dp(180))
-        
-        content = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(10))
-        
-        title = Label(
-            text='📋 Quick Setup Guide',
-            font_size=dp(16), size_hint_y=None, height=dp(30),
-            color=COLORS['text_primary'], bold=True, halign='left'
-        )
-        title.bind(texture_size=title.setter('text_size'))
-        content.add_widget(title)
-        
+        # Instructions
         instructions_scroll = ScrollView()
         instructions_text = Label(
             text=(
-                "1. 🖥️ Run start_cloudflare.bat on target computer\n\n"
-                "2. 📋 Copy the Cloudflare URL from terminal\n\n" 
-                "3. 📝 Paste URL above and add '/shutdown'\n\n"
-                "4. 🔍 Test connection to verify tunnel\n\n"
-                "5. ⚡ Use shutdown button when ready\n\n"
-                "⚠️ Ensure tunnel is running before connecting!"
+                "Token Configuration:\n\n"
+                "• The admin token is used to authenticate shutdown commands\n\n"
+                "• Make sure this matches the token configured on the target machine\n\n"
+                "• Token is hidden by default for security\n\n"
+                "• Click 'Show/Hide Token' to toggle visibility\n\n"
+                "• Don't forget to save after making changes\n\n"
+                "Security Note:\n"
+                "Keep your admin token secure and don't share it with unauthorized users."
             ),
-            text_size=(None, None), halign='left', valign='top',
-            font_size=dp(12), color=COLORS['text_secondary']
+            text_size=(dp(300), None),
+            halign='left',
+            valign='top',
+            font_size=dp(13),
+            size_hint_y=None
         )
+        instructions_text.bind(texture_size=instructions_text.setter('size'))
         instructions_scroll.add_widget(instructions_text)
-        content.add_widget(instructions_scroll)
-        
-        card.add_widget(content)
-        return card
+        self.add_widget(instructions_scroll)
     
-    def update_status(self, message, status_type='info'):
-        """Update status with modern styling"""
+    def toggle_password_visibility(self, instance):
+        """Toggle password visibility for the token input"""
+        self.token_input.password = not self.token_input.password
+        
+    def save_token(self, instance):
+        """Save the token and update the main controller"""
+        new_token = self.token_input.text.strip()
+        if new_token:
+            self.app_instance.admin_token = new_token
+            self.settings_status.text = "✅ Token saved successfully!"
+            self.settings_status.color = (0, 1, 0, 1)
+        else:
+            self.settings_status.text = "❌ Token cannot be empty!"
+            self.settings_status.color = (1, 0, 0, 1)
+    
+    def reset_defaults(self, instance):
+        """Reset all settings to default values"""
+        self.token_input.text = DEFAULT_ADMIN_TOKEN
+        self.app_instance.admin_token = DEFAULT_ADMIN_TOKEN
+        self.settings_status.text = "🔄 Settings reset to defaults"
+        self.settings_status.color = (0, 0, 1, 1)
+
+
+class MobileShutdownController(BoxLayout):
+    title = StringProperty("Controller")
+    
+    def __init__(self, app_instance, **kwargs):
+        super().__init__(**kwargs)
+        self.app_instance = app_instance
+        self.orientation = 'vertical'
+        self.spacing = dp(10)
+        self.padding = dp(20)
+        
+        # Title
+        title = Label(
+            text='Remote Shutdown Controller',
+            font_size=dp(20),
+            size_hint_y=None,
+            height=dp(50),
+            bold=True
+        )
+        self.add_widget(title)
+        
+        # URL input section
+        url_section = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(120))
+        url_section.add_widget(Label(
+            text='Cloudflare Tunnel URL:',
+            font_size=dp(16),
+            size_hint_y=None,
+            height=dp(40),
+            bold=True
+        ))
+        
+        self.url_input = TextInput(
+            text=DEFAULT_TARGET_URL,
+            multiline=False,
+            size_hint_y=None,
+            height=dp(40),
+            font_size=dp(14)
+        )
+        url_section.add_widget(self.url_input)
+        
+        update_url_btn = Button(
+            text='Update URL',
+            size_hint_y=None,
+            height=dp(40),
+            background_color=(0.2, 0.6, 1, 1)
+        )
+        update_url_btn.bind(on_press=self.update_url)
+        url_section.add_widget(update_url_btn)
+        
+        self.add_widget(url_section)
+        
+        # Status section
+        self.status_label = Label(
+            text='Ready',
+            font_size=dp(16),
+            color=(0, 1, 0, 1),
+            size_hint_y=None,
+            height=dp(40)
+        )
+        self.add_widget(self.status_label)
+        
+        # Control buttons
+        button_section = GridLayout(cols=1, spacing=dp(10), size_hint_y=None, height=dp(120))
+        
+        test_btn = Button(
+            text='Test Connection',
+            size_hint_y=None,
+            height=dp(50),
+            background_color=(1, 0.6, 0, 1),
+            font_size=dp(16)
+        )
+        test_btn.bind(on_press=self.test_connection)
+        button_section.add_widget(test_btn)
+        
+        shutdown_btn = Button(
+            text='SHUTDOWN TARGET',
+            size_hint_y=None,
+            height=dp(60),
+            background_color=(1, 0.2, 0.2, 1),
+            font_size=dp(18),
+            bold=True
+        )
+        shutdown_btn.bind(on_press=self.confirm_shutdown)
+        button_section.add_widget(shutdown_btn)
+        
+        self.add_widget(button_section)
+        
+        # Instructions
+        instructions_scroll = ScrollView()
+        instructions_text = Label(
+            text=(
+                "Instructions:\n\n"
+                "1. Configure your admin token in the Settings tab\n\n"
+                "2. Run start_cloudflare.bat on the target machine\n\n"
+                "3. Copy the Cloudflare URL from the terminal output\n\n"
+                "4. Paste it above and add '/shutdown' to the end\n\n"
+                "5. Click 'Test Connection' to verify connectivity\n\n"
+                "6. Click 'SHUTDOWN TARGET' to send shutdown command\n\n"
+                "Note: Make sure the tunnel is running before attempting connection."
+            ),
+            text_size=(dp(300), None),
+            halign='left',
+            valign='top',
+            font_size=dp(14),
+            size_hint_y=None
+        )
+        instructions_text.bind(texture_size=instructions_text.setter('size'))
+        instructions_scroll.add_widget(instructions_text)
+        self.add_widget(instructions_scroll)
+    
+    def update_status(self, message, color=(0, 0, 0, 1)):
+        """Update status label with message and color"""
         def update_ui():
             self.status_label.text = message
-            if status_type == 'success':
-                self.status_indicator.color = COLORS['success']
-                self.status_indicator.text = '✓'
-            elif status_type == 'warning':
-                self.status_indicator.color = COLORS['warning']
-                self.status_indicator.text = '⚠'
-            elif status_type == 'error':
-                self.status_indicator.color = COLORS['error']
-                self.status_indicator.text = '✗'
-            else:
-                self.status_indicator.color = COLORS['secondary']
-                self.status_indicator.text = '●'
+            self.status_label.color = color
         
         Clock.schedule_once(lambda dt: update_ui())
     
     def update_url(self, instance):
+        """Update URL with /shutdown endpoint if needed"""
         current_url = self.url_input.text.strip()
         if current_url:
             if not current_url.endswith('/shutdown'):
@@ -316,158 +293,165 @@ class MobileShutdownController(FloatLayout):
                 else:
                     current_url += 'shutdown'
                 self.url_input.text = current_url
-            self.update_status("URL updated successfully", "success")
+            self.update_status("URL updated", (0, 0, 1, 1))
         else:
-            self.show_modern_popup("Error", "Please enter a URL first!", "error")
+            self.show_popup("Error", "Please enter a URL first!")
     
     def test_connection(self, instance):
-        self.update_status("Testing connection...", "warning")
+        """Test connection to the target URL"""
+        self.update_status("Testing connection...", (1, 0.6, 0, 1))
         threading.Thread(target=self._test_connection_thread, daemon=True).start()
     
     def _test_connection_thread(self):
+        """Background thread for testing connection"""
         try:
             url = self.url_input.text.strip()
-            if not url or url == TARGET_URL:
-                self.update_status("Please update the URL first!", "error")
+            if not url or url == DEFAULT_TARGET_URL:
+                self.update_status("Please update the URL first!", (1, 0, 0, 1))
                 return
             
+            # Test basic connection to root
             base_url = url.replace('/shutdown', '/')
             headers = {"User-Agent": "Mozilla/5.0 (Android) Mobile Controller"}
             
+            print(f"Testing connection to: {base_url}")
             response = requests.get(base_url, headers=headers, verify=False, timeout=10)
             
             if response.status_code == 200:
-                self.update_status("Connection successful! Ready to shutdown", "success")
+                self.update_status("✅ Connection successful! Ready to shutdown.", (0, 1, 0, 1))
+                print(f"Connection test passed: {response.status_code}")
             else:
-                self.update_status(f"Response code {response.status_code} received", "warning")
+                self.update_status(f"⚠️ Got response code {response.status_code}", (1, 0.6, 0, 1))
+                print(f"Response: {response.text[:200]}")
                 
         except requests.exceptions.ConnectionError:
-            self.update_status("Connection failed - check URL/tunnel", "error")
+            self.update_status("❌ Connection failed - check URL/tunnel", (1, 0, 0, 1))
+            print("Connection error - tunnel may not be running")
         except Exception as e:
-            self.update_status(f"Error: {str(e)[:25]}...", "error")
+            self.update_status(f"❌ Error: {str(e)[:30]}...", (1, 0, 0, 1))
+            print(f"Test error: {e}")
     
     def confirm_shutdown(self, instance):
-        self.show_confirm_popup()
-    
-    def show_confirm_popup(self):
-        content = BoxLayout(orientation='vertical', spacing=dp(20), padding=dp(20))
-        
-        # Warning section
-        warning_box = BoxLayout(orientation='horizontal', spacing=dp(15), size_hint_y=None, height=dp(60))
-        
-        icon = Label(text='⚠️', font_size=dp(40), size_hint_x=None, width=dp(50))
-        warning_box.add_widget(icon)
-        
-        message = Label(
+        """Show confirmation popup before shutdown"""
+        content = BoxLayout(orientation='vertical', spacing=dp(10))
+        content.add_widget(Label(
             text='Are you sure you want to shutdown the target machine?',
-            text_size=(dp(250), None), halign='center', valign='middle',
-            font_size=dp(16), color=COLORS['text_primary']
-        )
-        warning_box.add_widget(message)
-        content.add_widget(warning_box)
+            text_size=(dp(280), None),
+            halign='center',
+            font_size=dp(16)
+        ))
         
-        # Buttons
-        buttons = BoxLayout(orientation='horizontal', spacing=dp(15), size_hint_y=None, height=dp(50))
+        buttons = BoxLayout(orientation='horizontal', spacing=dp(10), size_hint_y=None, height=dp(50))
         
-        cancel_btn = ModernButton(text='Cancel', bg_color=COLORS['text_secondary'], size_hint_x=0.4)
-        confirm_btn = ModernButton(text='Shutdown', bg_color=COLORS['error'], size_hint_x=0.6)
+        yes_btn = Button(text='YES', background_color=(1, 0.2, 0.2, 1))
+        no_btn = Button(text='NO', background_color=(0.5, 0.5, 0.5, 1))
         
-        buttons.add_widget(cancel_btn)
-        buttons.add_widget(confirm_btn)
+        buttons.add_widget(yes_btn)
+        buttons.add_widget(no_btn)
         content.add_widget(buttons)
         
         popup = Popup(
-            title='⚠️ Confirm Shutdown', content=content, size_hint=(0.85, 0.4),
-            auto_dismiss=False, title_color=COLORS['text_primary'],
-            separator_color=COLORS['primary']
+            title='Confirm Shutdown',
+            content=content,
+            size_hint=(0.8, 0.4),
+            auto_dismiss=False
         )
         
-        cancel_btn.bind(on_press=popup.dismiss)
-        confirm_btn.bind(on_press=lambda x: self.execute_shutdown(popup))
+        yes_btn.bind(on_press=lambda x: self.execute_shutdown(popup))
+        no_btn.bind(on_press=popup.dismiss)
         
         popup.open()
     
     def execute_shutdown(self, popup):
+        """Execute the shutdown command"""
         popup.dismiss()
-        self.update_status("Sending shutdown command...", "warning")
+        self.update_status("Sending shutdown command...", (1, 0.6, 0, 1))
         threading.Thread(target=self._shutdown_thread, daemon=True).start()
     
     def _shutdown_thread(self):
+        """Background thread for shutdown operation"""
         try:
             url = self.url_input.text.strip()
-            if not url or url == TARGET_URL:
-                self.update_status("Please update the URL first!", "error")
+            if not url or url == DEFAULT_TARGET_URL:
+                self.update_status("Please update the URL first!", (1, 0, 0, 1))
+                Clock.schedule_once(lambda dt: self.show_popup("Error", "Please update the tunnel URL first!"))
                 return
             
             headers = {
-                "Authorization": f"Bearer {ADMIN_TOKEN}",
+                "Authorization": f"Bearer {self.app_instance.admin_token}",
                 "User-Agent": "Mozilla/5.0 (Android) Mobile Controller",
                 "Content-Type": "application/json"
             }
             
+            print(f"Sending shutdown command to: {url}")
             response = requests.post(url, headers=headers, verify=False, timeout=10)
             
+            print(f"Response Status Code: {response.status_code}")
+            print(f"Response Text: {response.text}")
+            
             if response.status_code == 200:
-                self.update_status("Shutdown command sent successfully!", "success")
-                Clock.schedule_once(lambda dt: self.show_modern_popup(
-                    "Success", "Shutdown command accepted!", "success"
-                ))
+                self.update_status("✅ Shutdown command sent successfully!", (0, 1, 0, 1))
+                Clock.schedule_once(lambda dt: self.show_popup("Success", "Shutdown command accepted!"))
             elif response.status_code == 401:
-                self.update_status("Unauthorized - wrong token", "error")
-                Clock.schedule_once(lambda dt: self.show_modern_popup(
-                    "Unauthorized", "Invalid authentication token.", "error"
-                ))
+                self.update_status("❌ Unauthorized - wrong token", (1, 0, 0, 1))
+                Clock.schedule_once(lambda dt: self.show_popup("Unauthorized", "Invalid token."))
             else:
-                self.update_status(f"Error {response.status_code}", "error")
+                self.update_status(f"❌ Error {response.status_code}", (1, 0, 0, 1))
+                Clock.schedule_once(lambda dt: self.show_popup("Failed", f"Error {response.status_code}: {response.text[:100]}"))
                 
         except requests.exceptions.ConnectionError:
-            self.update_status("Connection failed", "error")
+            self.update_status("❌ Connection failed", (1, 0, 0, 1))
+            Clock.schedule_once(lambda dt: self.show_popup("Connection Error", "Could not connect to target. Check if tunnel is running."))
         except Exception as e:
-            self.update_status("Error occurred", "error")
+            error_msg = str(e)
+            self.update_status("❌ Error occurred", (1, 0, 0, 1))
+            Clock.schedule_once(lambda dt: self.show_popup("Error", error_msg))
     
-    def show_modern_popup(self, title, message, popup_type="info"):
-        content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(20))
-        
-        icons = {'success': '✅', 'error': '❌', 'warning': '⚠️', 'info': 'ℹ️'}
-        icon_colors = {
-            'success': COLORS['success'], 'error': COLORS['error'],
-            'warning': COLORS['warning'], 'info': COLORS['secondary']
-        }
-        
-        icon = Label(
-            text=icons.get(popup_type, 'ℹ️'), font_size=dp(40),
-            size_hint_y=None, height=dp(50),
-            color=icon_colors.get(popup_type, COLORS['secondary'])
+    def show_popup(self, title, message):
+        """Show a popup message"""
+        content = Label(
+            text=message,
+            text_size=(dp(280), None),
+            halign='center',
+            font_size=dp(14)
         )
-        content.add_widget(icon)
-        
-        msg_label = Label(
-            text=message, text_size=(dp(250), None), halign='center',
-            font_size=dp(14), color=COLORS['text_primary']
-        )
-        content.add_widget(msg_label)
-        
-        ok_btn = ModernButton(
-            text='OK', size_hint_y=None, height=dp(40),
-            bg_color=icon_colors.get(popup_type, COLORS['secondary'])
-        )
-        content.add_widget(ok_btn)
         
         popup = Popup(
-            title=f"{icons.get(popup_type, 'ℹ️')} {title}",
-            content=content, size_hint=(0.8, 0.35),
-            title_color=COLORS['text_primary'],
-            separator_color=icon_colors.get(popup_type, COLORS['secondary'])
+            title=title,
+            content=content,
+            size_hint=(0.8, 0.3)
         )
-        
-        ok_btn.bind(on_press=popup.dismiss)
         popup.open()
 
 
+class MainTabbedPanel(TabbedPanel):
+    def __init__(self, app_instance, **kwargs):
+        super().__init__(**kwargs)
+        self.app_instance = app_instance
+        self.do_default_tab = False
+        
+        # Controller tab
+        controller_tab = TabbedPanelItem(text='Controller')
+        controller_tab.content = MobileShutdownController(app_instance)
+        self.add_widget(controller_tab)
+        
+        # Settings tab
+        settings_tab = TabbedPanelItem(text='Settings')
+        settings_tab.content = SettingsPanel(app_instance)
+        self.add_widget(settings_tab)
+        
+        # Set default tab to controller
+        self.switch_to(controller_tab)
+
+
 class MobileShutdownApp(App):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.admin_token = DEFAULT_ADMIN_TOKEN
+    
     def build(self):
         self.title = 'Remote Shutdown Controller'
-        return MobileShutdownController()
+        return MainTabbedPanel(self)
 
 
 if __name__ == '__main__':
