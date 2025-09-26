@@ -83,28 +83,46 @@ jobs:
                   export JAVA_HOME=/usr/lib/jvm/temurin-11-jdk-amd64
                   export PATH=/usr/lib/jvm/temurin-11-jdk-amd64/bin:$PATH
                   
-                  # Remove buildozer's cache to force fresh setup
+                  # AGGRESSIVELY FORCE BUILDOZER TO USE SYSTEM SDK
+                  # Remove ALL buildozer cache and force it to use our SDK
                   rm -rf /home/runner/.buildozer/
                   
-                  # Set environment variables that buildozer respects
+                  # Set EVERY possible environment variable that buildozer might check
                   export ANDROID_HOME=/usr/local/lib/android/sdk
                   export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
                   export ANDROIDSDK=/usr/local/lib/android/sdk
+                  export ANDROID_SDK=/usr/local/lib/android/sdk
                   export ANDROIDNDK=/usr/local/lib/android/sdk/ndk/21.4.7075529
+                  export ANDROID_NDK_ROOT=/usr/local/lib/android/sdk/ndk/21.4.7075529
                   export ANDROIDAPI=29
                   export ANDROIDNDKVER=r21e
                   
-                  # Add Android tools to PATH
-                  export PATH=$PATH:/usr/local/lib/android/sdk/build-tools/29.0.3
-                  export PATH=$PATH:/usr/local/lib/android/sdk/platform-tools
-                  export PATH=$PATH:/usr/local/lib/android/sdk/tools/bin
+                  # Create buildozer directories and FORCE symlinks BEFORE buildozer runs
+                  mkdir -p /home/runner/.buildozer/android/platform/
+                  ln -sf /usr/local/lib/android/sdk /home/runner/.buildozer/android/platform/android-sdk
+                  ln -sf /usr/local/lib/android/sdk/ndk/21.4.7075529 /home/runner/.buildozer/android/platform/android-ndk-r21e
                   
-                  echo "=== Environment Check ==="
+                  # Add Android tools to PATH with HIGHEST priority
+                  export PATH=/usr/local/lib/android/sdk/build-tools/29.0.3:/usr/local/lib/android/sdk/platform-tools:/usr/local/lib/android/sdk/tools/bin:$PATH
+                  
+                  echo "=== AGGRESSIVE Environment Check ==="
                   echo "JAVA_HOME: $JAVA_HOME"
                   echo "ANDROID_HOME: $ANDROID_HOME"
+                  echo "PATH: $PATH"
                   java -version
-                  which aidl
-                  aidl --help | head -3
+                  echo "AIDL location:"
+                  which aidl || echo "AIDL NOT IN PATH!"
+                  find /usr/local/lib/android/sdk -name "aidl" -type f
+                  echo "Testing AIDL directly:"
+                  /usr/local/lib/android/sdk/build-tools/29.0.3/aidl --help | head -3 || echo "AIDL BINARY BROKEN!"
+                  
+                  echo "=== Buildozer SDK verification ==="
+                  ls -la /home/runner/.buildozer/android/platform/
+                  ls -la /home/runner/.buildozer/android/platform/android-sdk/build-tools/ || echo "NO BUILD TOOLS IN BUILDOZER SDK!"
+                  
+                  # FINAL NUCLEAR OPTION: Copy AIDL directly to where buildozer expects it
+                  mkdir -p /home/runner/.buildozer/android/platform/android-sdk/build-tools/29.0.3/
+                  cp /usr/local/lib/android/sdk/build-tools/29.0.3/aidl /home/runner/.buildozer/android/platform/android-sdk/build-tools/29.0.3/aidl || echo "FAILED TO COPY AIDL!"
                   
                   # Build with verbose output
                   buildozer android debug --verbose
