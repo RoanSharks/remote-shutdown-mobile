@@ -32,19 +32,16 @@ jobs:
 
             - name: Setup Android SDK
               run: |
-                  mkdir -p /home/runner/android-sdk
+                  mkdir -p /home/runner/android-sdk/cmdline-tools
                   cd /home/runner
                   wget -q https://dl.google.com/android/repository/commandlinetools-linux-6514223_latest.zip
-                  unzip -q commandlinetools-linux-6514223_latest.zip -d android-sdk
-                  mv android-sdk/tools android-sdk/cmdline-tools/latest
-                  mkdir -p android-sdk/cmdline-tools/latest
-                  mv android-sdk/cmdline-tools/tools/* android-sdk/cmdline-tools/latest/
-                  rmdir android-sdk/cmdline-tools/tools
+                  unzip -q commandlinetools-linux-6514223_latest.zip
+                  mv tools /home/runner/android-sdk/cmdline-tools/latest
 
                   # Accept licenses
-                  mkdir -p android-sdk/licenses
-                  echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > android-sdk/licenses/android-sdk-license
-                  echo "d975f751698a77b662f1254ddbeed3901e976f5a" > android-sdk/licenses/intel-android-extra-license
+                  mkdir -p /home/runner/android-sdk/licenses
+                  echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > /home/runner/android-sdk/licenses/android-sdk-license
+                  echo "d975f751698a77b662f1254ddbeed3901e976f5a" > /home/runner/android-sdk/licenses/intel-android-extra-license
 
                   # Set environment variables
                   echo "ANDROID_HOME=/home/runner/android-sdk" >> $GITHUB_ENV
@@ -56,17 +53,16 @@ jobs:
 
             - name: Build APK
               run: |
-                  cd controller
                   buildozer android debug
 
             - name: Find APK
               run: |
                   find . -name "*.apk" -type f
-                  ls -la controller/bin/ || echo "No bin directory"
+                  ls -la bin/ || echo "No bin directory"
 
             - name: Upload APK
               uses: actions/upload-artifact@v4
               with:
                   name: remote-controller-apk
-                  path: "controller/bin/*.apk"
+                  path: "bin/*.apk"
                   if-no-files-found: error
