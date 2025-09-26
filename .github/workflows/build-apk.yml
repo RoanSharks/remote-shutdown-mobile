@@ -1,139 +1,36 @@
-name: Build Android APK
+- name: Install Android components
+  run: |
+      export JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
+      export PATH=$JAVA_HOME/bin:$PATH
+      sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;25.2.9519653"
 
-on:
-    push:
-        branches: [main]
-    workflow_dispatch:
-
-jobs:
-    build:
-        runs-on: ubuntu-latest
-
-        steps:
-            - uses: actions/checkout@v4
-
-            - name: Set up JDK 17
-              uses: actions/setup-java@v3
-              with:
-                  distribution: 'temurin'
-                  java-version: '17'
-
-            - name: Setup Android SDK
-              uses: android-actions/setup-android@v3
-              env:
-                  SKIP_JDK_VERSION_CHECK: true
-                  JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
-
-            - name: Set up JDK 11 for buildozer
-              uses: actions/setup-java@v3
-              with:
-                  distribution: 'temurin'
-                  java-version: '11'
-
-            - name: Set up Python
-              uses: actions/setup-python@v4
-              with:
-                  python-version: "3.11"
-
-            - name: Install system dependencies
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y python3-pip build-essential git zip unzip wget curl
-                  sudo apt-get install -y python3-setuptools python3-dev libffi-dev libssl-dev
-
-            - name: Install Python dependencies
-              run: |
-                  pip install --upgrade pip
-                  pip install cython==0.29.33
-                  pip install buildozer
-                  pip install python-for-android
-
-            - name: Accept Android licenses
-              run: |
-                  export JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
-                  export PATH=$JAVA_HOME/bin:$PATH
-                  yes | sdkmanager --licenses
-
-            - name: Install Android components
-              run: |
-                  export JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
-                  export PATH=$JAVA_HOME/bin:$PATH
-                  sdkmanager "platform-tools" "platforms;android-29" "build-tools;29.0.3" "ndk;25.2.9519653"
-
-            - name: Verify Android Setup
-              run: |
-                  export JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
-                  export PATH=$JAVA_HOME/bin:$PATH
-                  echo "=== Android SDK Setup Verification ==="
-                  echo "ANDROID_HOME: $ANDROID_HOME"
-                  echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
-                  echo ""
-                  echo "Looking for AIDL binary:"
-                  find $ANDROID_HOME -name "aidl" -type f 2>/dev/null || echo "AIDL not found!"
-                  echo ""
-                  echo "Testing AIDL command:"
-                  which aidl || echo "AIDL not in PATH"
-                  $ANDROID_HOME/build-tools/29.0.3/aidl --help 2>/dev/null | head -3 || echo "Cannot run AIDL from build-tools"
-
-            - name: Build APK with Python-for-Android directly (FUCK BUILDOZER!)
-              run: |
-                  echo "=== FUCK BUILDOZER - USING P4A DIRECTLY ==="
-                  
-                  # Use Java 17 for ALL Android SDK tools (they require it!)
-                  export JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
-                  export PATH=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64/bin:$PATH
-                  
-                  # Set Android environment with NDK 25 (minimum required by P4A)
-                  export ANDROID_HOME=/usr/local/lib/android/sdk
-                  export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-                  export ANDROIDAPI=29
-                  export ANDROIDNDK=/usr/local/lib/android/sdk/ndk/25.2.9519653
-                  export PATH=/usr/local/lib/android/sdk/build-tools/29.0.3:/usr/local/lib/android/sdk/platform-tools:$PATH
-                  
-                  # Install Python-for-Android directly
-                  pip install python-for-android
-                  
-                  echo "=== Environment Check ==="
-                  echo "JAVA_HOME: $JAVA_HOME"
-                  echo "ANDROID_HOME: $ANDROID_HOME"
-                  echo "ANDROIDNDK: $ANDROIDNDK"
-                  java -version
-                  which aidl
-                  aidl --help | head -3
-                  
-                  # Verify NDK version
-                  echo "=== NDK Verification ==="
-                  ls -la /usr/local/lib/android/sdk/ndk/ || echo "NDK directory not found"
-                  cat $ANDROIDNDK/source.properties || echo "NDK source.properties not found"
-                  
-                  # Test avdmanager (the tool that was failing)
-                  echo "=== Testing avdmanager ==="
-                  avdmanager list target || echo "avdmanager failed but continuing..."
-                  
-                  # Create APK directly with p4a using NDK 25
-                  p4a apk \
-                    --private . \
-                    --package=com.tarbunny.remote_controller \
-                    --name="Remote Controller" \
-                    --version=1.0 \
-                    --bootstrap=sdl2 \
-                    --requirements=python3,kivy,requests,urllib3 \
-                    --permissions=INTERNET,ACCESS_NETWORK_STATE \
-                    --arch=arm64-v8a \
-                    --release \
-                    --sdk-dir=/usr/local/lib/android/sdk \
-                    --ndk-dir=/usr/local/lib/android/sdk/ndk/25.2.9519653 \
-                    --android-api=29 \
-                    --ndk-api=21
-
-            - name: Find APK
-              run: |
-                  find . -name "*.apk" -type f
-                  ls -la bin/ || echo "No bin directory"
-
-            - name: Upload APK
-              uses: actions/upload-artifact@v4
-              with:
-                  name: remote-controller-apk
-                  path: "bin/*.apk"
-                  if-no-files-found: error
+- name: Build APK with Python-for-Android directly (FUCK BUILDOZER!)
+  run: |
+      echo "=== FUCK BUILDOZER - USING P4A DIRECTLY ==="
+      
+      # Java 17 for Android SDK tools
+      export JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
+      export PATH=$JAVA_HOME/bin:$PATH
+      
+      # Android SDK/NDK setup
+      export ANDROID_HOME=/usr/local/lib/android/sdk
+      export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+      export ANDROIDAPI=35
+      export ANDROIDNDK=/usr/local/lib/android/sdk/ndk/25.2.9519653
+      export PATH=$ANDROID_HOME/build-tools/35.0.0:$ANDROID_HOME/platform-tools:$PATH
+      
+      # Build APK
+      p4a apk \
+        --private . \
+        --package=com.tarbunny.remote_controller \
+        --name="Remote Controller" \
+        --version=1.0 \
+        --bootstrap=sdl2 \
+        --requirements=python3,kivy,requests,urllib3 \
+        --permissions=INTERNET,ACCESS_NETWORK_STATE \
+        --arch=arm64-v8a \
+        --release \
+        --sdk-dir=$ANDROID_HOME \
+        --ndk-dir=$ANDROIDNDK \
+        --android-api=$ANDROIDAPI \
+        --ndk-api=21
