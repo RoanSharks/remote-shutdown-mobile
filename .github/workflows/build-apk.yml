@@ -34,3 +34,4 @@
         --ndk-dir=$ANDROIDNDK \
         --android-api=$ANDROIDAPI \
         --ndk-api=21
+      echo "=== P4A Build Complete ==="
