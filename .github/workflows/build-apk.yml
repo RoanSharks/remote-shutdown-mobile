@@ -12,15 +12,24 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Set up JDK 11
+              uses: actions/setup-java@v3
+              with:
+                  distribution: 'temurin'
+                  java-version: '11'
+
             - name: Set up Python
               uses: actions/setup-python@v4
               with:
                   python-version: "3.11"
 
+            - name: Setup Android SDK
+              uses: android-actions/setup-android@v3
+
             - name: Install system dependencies
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y python3-pip build-essential git zip unzip openjdk-11-jdk wget curl
+                  sudo apt-get install -y python3-pip build-essential git zip unzip wget curl
                   sudo apt-get install -y python3-setuptools python3-dev libffi-dev libssl-dev
 
             - name: Install Python dependencies
@@ -30,55 +39,31 @@ jobs:
                   pip install buildozer
                   pip install python-for-android
 
-            - name: Setup Android SDK
+            - name: Accept Android licenses
               run: |
-                  mkdir -p /home/runner/android-sdk/cmdline-tools
-                  cd /home/runner
-                  wget -q https://dl.google.com/android/repository/commandlinetools-linux-6514223_latest.zip
-                  unzip -q commandlinetools-linux-6514223_latest.zip
-                  mv tools /home/runner/android-sdk/cmdline-tools/latest
+                  yes | sdkmanager --licenses
 
-                  # Accept licenses
-                  mkdir -p /home/runner/android-sdk/licenses
-                  echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > /home/runner/android-sdk/licenses/android-sdk-license
-                  echo "d975f751698a77b662f1254ddbeed3901e976f5a" > /home/runner/android-sdk/licenses/intel-android-extra-license
-
-                  # Set environment variables
-                  echo "ANDROID_HOME=/home/runner/android-sdk" >> $GITHUB_ENV
-                  echo "ANDROID_SDK_ROOT=/home/runner/android-sdk" >> $GITHUB_ENV
-                  echo "/home/runner/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-                  echo "/home/runner/android-sdk/platform-tools" >> $GITHUB_PATH
-
-                  # Install required packages with AIDL support
-                  /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --update
-                  /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-29" "platforms;android-33" "build-tools;29.0.3" "build-tools;33.0.0" "ndk;21.4.7075529"
-                  
-                  # Verify AIDL is available
-                  ls -la /home/runner/android-sdk/build-tools/29.0.3/aidl || echo "AIDL not found in build-tools"
-                  ls -la /home/runner/android-sdk/build-tools/33.0.0/aidl || echo "AIDL not found in newer build-tools"
-                  
-                  # Add build-tools to PATH so buildozer can find aidl
-                  echo "/home/runner/android-sdk/build-tools/29.0.3" >> $GITHUB_PATH
-                  echo "/home/runner/android-sdk/build-tools/33.0.0" >> $GITHUB_PATH
+            - name: Install Android components
+              run: |
+                  sdkmanager "platform-tools" "platforms;android-29" "build-tools;29.0.3" "ndk;21.4.7075529"
 
             - name: Verify Android Setup
               run: |
                   echo "=== Android SDK Setup Verification ==="
                   echo "ANDROID_HOME: $ANDROID_HOME"
                   echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
-                  echo "PATH includes:"
-                  echo $PATH | tr ':' '\n' | grep android
                   echo ""
                   echo "Looking for AIDL binary:"
-                  find /home/runner/android-sdk -name "aidl" -type f 2>/dev/null || echo "AIDL not found!"
+                  find $ANDROID_HOME -name "aidl" -type f 2>/dev/null || echo "AIDL not found!"
                   echo ""
                   echo "Testing AIDL command:"
                   which aidl || echo "AIDL not in PATH"
-                  /home/runner/android-sdk/build-tools/29.0.3/aidl --help 2>/dev/null | head -3 || echo "Cannot run AIDL"
+                  $ANDROID_HOME/build-tools/29.0.3/aidl --help 2>/dev/null | head -3 || echo "Cannot run AIDL from build-tools"
 
             - name: Build APK
               run: |
                   echo "=== Starting APK Build ==="
+                  export PATH=$PATH:$ANDROID_HOME/build-tools/29.0.3
                   buildozer android debug
 
             - name: Find APK
