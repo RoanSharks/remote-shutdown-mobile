@@ -50,14 +50,20 @@ jobs:
 
             - name: Accept Android licenses
               run: |
+                  export JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
+                  export PATH=$JAVA_HOME/bin:$PATH
                   yes | sdkmanager --licenses
 
             - name: Install Android components
               run: |
+                  export JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
+                  export PATH=$JAVA_HOME/bin:$PATH
                   sdkmanager "platform-tools" "platforms;android-29" "build-tools;29.0.3" "ndk;21.4.7075529"
 
             - name: Verify Android Setup
               run: |
+                  export JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
+                  export PATH=$JAVA_HOME/bin:$PATH
                   echo "=== Android SDK Setup Verification ==="
                   echo "ANDROID_HOME: $ANDROID_HOME"
                   echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
