@@ -58,7 +58,7 @@ jobs:
               run: |
                   export JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
                   export PATH=$JAVA_HOME/bin:$PATH
-                  sdkmanager "platform-tools" "platforms;android-29" "build-tools;29.0.3" "ndk;21.4.7075529"
+                  sdkmanager "platform-tools" "platforms;android-29" "build-tools;29.0.3" "ndk;25.2.9519653"
 
             - name: Verify Android Setup
               run: |
@@ -83,11 +83,11 @@ jobs:
                   export JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64
                   export PATH=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.16-8/x64/bin:$PATH
                   
-                  # Set Android environment
+                  # Set Android environment with NDK 25 (minimum required by P4A)
                   export ANDROID_HOME=/usr/local/lib/android/sdk
                   export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
                   export ANDROIDAPI=29
-                  export ANDROIDNDK=/usr/local/lib/android/sdk/ndk/21.4.7075529
+                  export ANDROIDNDK=/usr/local/lib/android/sdk/ndk/25.2.9519653
                   export PATH=/usr/local/lib/android/sdk/build-tools/29.0.3:/usr/local/lib/android/sdk/platform-tools:$PATH
                   
                   # Install Python-for-Android directly
@@ -101,11 +101,16 @@ jobs:
                   which aidl
                   aidl --help | head -3
                   
+                  # Verify NDK version
+                  echo "=== NDK Verification ==="
+                  ls -la /usr/local/lib/android/sdk/ndk/ || echo "NDK directory not found"
+                  cat $ANDROIDNDK/source.properties || echo "NDK source.properties not found"
+                  
                   # Test avdmanager (the tool that was failing)
                   echo "=== Testing avdmanager ==="
                   avdmanager list target || echo "avdmanager failed but continuing..."
                   
-                  # Create APK directly with p4a (BYPASS BUILDOZER COMPLETELY!)
+                  # Create APK directly with p4a using NDK 25
                   p4a apk \
                     --private . \
                     --package=com.tarbunny.remote_controller \
@@ -117,7 +122,7 @@ jobs:
                     --arch=arm64-v8a \
                     --release \
                     --sdk-dir=/usr/local/lib/android/sdk \
-                    --ndk-dir=/usr/local/lib/android/sdk/ndk/21.4.7075529 \
+                    --ndk-dir=/usr/local/lib/android/sdk/ndk/25.2.9519653 \
                     --android-api=29 \
                     --ndk-api=21
 
